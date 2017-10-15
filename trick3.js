@@ -6,7 +6,7 @@
 
     let bconfig = {
         payout: 1.10,
-        wait: 10,
+        wait: 750,
         baseBet: .00000010,
         betIncreaseBy: 10
     }
@@ -25,11 +25,15 @@
         stop = !stop;
     });
 
-    // test();
+    test(6);
 
-    start(randNum() > 5000, bconfig.baseBet)
-        .then(console.log)
-        .catch(console.error)
+    // init();
+
+    function init() {
+        return start(randNum() > 5000, bconfig.baseBet)
+            .then(console.log)
+            .catch(console.error);
+    }
 
     function start(hilo, betAmount) {
 
@@ -40,19 +44,17 @@
 
                 // console.log(1, isWin);
                 if (stop) {
-                    return Promise.reject("game stopped ${ endStop }");
+                    return Promise.reject(`game stopped ${ endStop }`);
                 }
 
-                if (endStop >= 1) {
+                if (endStop >= 2) {
                     return Promise.reject(`game stopped at endStop ${ endStop }`);
                 }
 
                 if (isWin) {
                     multiplier = 0;
-                    // console.log(2, multiplier);
-                    if (!bet.isWin(!hilo)) {
-                        // console.log(3, multiplier);
-                        hilo = !hilo;
+                    hilo = !hilo;
+                    if (!bet.isWin(hilo)) {
                         return onLose();
                     }
                     return start(hilo, bconfig.baseBet);
@@ -88,15 +90,17 @@
         let t = bconfig.baseBet;
         let l = t;
 
-        for (var i = 1; i <= m; i++) {
+        for (let i = 1; i <= m; i++) {
             t = (l * 10) + bconfig.baseBet;
             l += t;
         }
         return t;
     }
 
-    function test() {
-        console.log(findNextBet(3).toFixed(8))
+    function test(m) {
+        for (let i = 1; i <= m; i++) {
+            console.log(findNextBet(i).toFixed(8))
+        }
     }
 
     function BTC() {
@@ -214,7 +218,7 @@
     }
 
     function randNum() {
-        return Math.floor(Math.random() * 9000) + 1000;
+        return Math.round(Math.random() * 9000) + 1000;
     }
 
 })();
