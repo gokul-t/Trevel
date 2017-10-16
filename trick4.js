@@ -2,30 +2,28 @@
 
     "use strict";
 
+    console.clear();
     window.autobet_dnr = true;
 
     let bconfig = {
-        payout: 1.10,
+        payout: 2,
         wait: 750,
-        baseBet: .00000010,
-        betIncreaseBy: 10
+        baseBet: .00000001,
+        xProfit: 1
     }
 
     let btc = new BTC();
     let bet = new BET();
+    let betStack = new BetStack();
 
     let multiplier = 0;
-    let rollCount = 0;
-
-    let endStop = 0;
-
     let stop = false;
 
     $(document).on("dblclick", () => {
         stop = !stop;
     });
 
-    // test(6);
+    // test(1);
 
     init();
 
@@ -37,19 +35,16 @@
 
     function start(hilo, betAmount) {
 
-        rollCount += 1;
 
         return bet.bet(hilo, betAmount)
             .then((isWin) => {
 
                 // console.log(1, isWin);
                 if (stop) {
-                    return Promise.reject(`game stopped ${ endStop }`);
+                    return Promise.reject(`game stopped manually`);
                 }
 
-                if (endStop >= 2) {
-                    return Promise.reject(`game stopped at endStop ${ endStop }`);
-                }
+                betStack.result(isWin, hilo);
 
                 if (isWin) {
                     multiplier = 0;
@@ -66,20 +61,11 @@
 
                     multiplier += 1;
 
-                    let bt = findNextBet(multiplier);
-
-                    let b = btc.balance() - bt;
-
-                    let nextBet = findNextBet(multiplier + 1);
-
-                    let end = !(b >= nextBet);
-
-                    betAmount = bt;
-
-                    if (end) {
-                        endStop += 1;
+                    if (betStack.needNotCompensate()) {
+                        betAmount = findNextBet(multiplier);
+                    } else {
+                        betAmount = findNextBet(multiplier - betStack.compensate());
                     }
-
                     return start(hilo, betAmount);
                 }
             });
@@ -87,16 +73,15 @@
 
 
     function findNextBet(m) {
-        let t = bconfig.baseBet;
-        let l = t;
-
+        let nextBet = bconfig.baseBet;
+        let tLoss = nextBet;
         for (let i = 1; i <= m; i++) {
-            t = (l * 10) + bconfig.baseBet;
-            l += t;
+            nextBet = tLoss + (m * bconfig.baseBet);
+            // nextBet = nextBet * 2.5;
+            tLoss += nextBet;
         }
-        return t;
+        return nextBet;
     }
-
 
     function getMultiTolerence() {
         let bal = btc.balance();
@@ -105,7 +90,7 @@
         let b = total;
         while (bal >= total) {
             m += 1;
-            console.log(m, b.toFixed(8), total.toFixed(8))
+            // console.log(`${ m }: bet - ${ b.toFixed(8) },  profit: ${ (b - (total-b)).toFixed(8) }, loss : ${ total.toFixed(8) }`);
             b = findNextBet(m);
             total += b;
         }
@@ -113,11 +98,62 @@
     }
 
     function test(m) {
-        // for (let i = 1; i <= m; i++) {
-        //     console.log(findNextBet(i).toFixed(8))
-        // }
+        for (let i = 1; i <= m; i++) {
+            console.log(findNextBet(i).toFixed(8))
+        }
 
-        getMultiTolerence();
+        console.log(getMultiTolerence());
+    }
+
+    function BetStack() {
+        let count = 0;
+        let lossCount = 0;
+
+        let highestLoss = 0;
+        let highestChange = 0;
+        let highestChangeInChange = 0;
+
+        let tolerence = getMultiTolerence();
+
+        this.tolerence = tolerence;
+
+        this.result = (isWin, hilo) => {
+            if (isWin) {
+                win();
+                lossCount = 0;
+            } else {
+                lossCount += 1;
+            }
+        };
+
+        this.compensate = () => {
+            return nextLossLevel() - tolerence;
+        };
+
+        this.nextLossLevel = nextLossLevel;
+
+        this.needNotCompensate = () => {
+            return tolerence > nextLossLevel();
+        }
+
+        function nextLossLevel() {
+            return highestLoss + highestChange + highestChangeInChange + 2;
+        }
+
+        function win() {
+            if (highestLoss < lossCount) {
+                let multiChange = lossCount - highestLoss;
+                if (highestChange < multiChange) {
+                    let changeInChange = multiChange - highestChange;
+                    if (highestChangeInChange < changeInChange) {
+                        highestChangeInChange = changeInChange;
+                    }
+                    highestChange = multiChange;
+                }
+                highestLoss = lossCount;
+            }
+        }
+
     }
 
     function BTC() {
