@@ -104,7 +104,8 @@
             console.log({
                 _hi: _hi,
                 _lo: _lo,
-                _neutral: _neutral
+                _neutral: _neutral,
+                count: count
             })
         }
 
@@ -153,10 +154,10 @@
             }
 
             let a = Math.abs(_hi - _lo);
-            a = (a / count) * 100;
+            a = (a / count) * 1000;
 
             a += (noP - 5);
-  
+
             result.betAmount = findNextBet(lossCount, bconfig.baseBet, a);
 
 
