@@ -9,14 +9,14 @@
         payout: 2,
         wait: 750,
         baseBet: .00000001,
-        xProfit: 1
+        xProfit: 1,
+        betIncreaseBy: 110
     }
 
     let btc = new BTC();
     let bet = new BET();
     let betStack = new BetStack();
 
-    let multiplier = 0;
     let stop = false;
 
     $(document).on("dblclick", () => {
@@ -41,45 +41,26 @@
 
                 // console.log(1, isWin);
                 if (stop) {
-                    return Promise.reject(`game stopped manually`);
+                    return Promise.reject(`game stopped manually`, betStack.info());
                 }
 
                 betStack.result(isWin, hilo);
 
-                if (isWin) {
-                    multiplier = 0;
-                    hilo = !hilo;
-                    if (!bet.isWin(hilo)) {
-                        return onLose();
-                    }
-                    return start(hilo, bconfig.baseBet);
-                } else {
-                    return onLose(true);
-                }
+                let p = betStack.prediction();
 
-                function onLose(realLose) {
-
-                    multiplier += 1;
-
-                    if (betStack.needNotCompensate()) {
-                        betAmount = findNextBet(multiplier);
-                    } else {
-                        betAmount = findNextBet(multiplier - betStack.compensate());
-                    }
-                    return start(hilo, betAmount);
-                }
+                return start(p.hilo, p.betAmount);
             });
     }
 
 
-    function findNextBet(m) {
-        let nextBet = bconfig.baseBet;
+    function findNextBet(m, nextBet = bconfig.baseBet, betIncrease = bconfig.betIncreaseBy) {
+        // console.log(m, nextBet, betIncrease);
         let tLoss = nextBet;
         for (let i = 1; i <= m; i++) {
-            nextBet = tLoss + (m * bconfig.baseBet);
-            // nextBet = nextBet * 2.5;
+            nextBet += nextBet * (betIncrease / 100);
             tLoss += nextBet;
         }
+        console.log(nextBet.toFixed(8))
         return nextBet;
     }
 
@@ -115,9 +96,34 @@
 
         let tolerence = getMultiTolerence();
 
+        let _hi = 0,
+            _lo = 0,
+            _neutral = 0;
+
+        this.info = () => {
+            console.log({
+                _hi: _hi,
+                _lo: _lo,
+                _neutral: _neutral
+            })
+        }
+
         this.tolerence = tolerence;
 
         this.result = (isWin, hilo) => {
+
+            count += 1;
+
+            let counter = bet.getCounter();
+
+            if (counter > 5250) {
+                _hi += 1;
+            } else if (counter < 4750) {
+                _lo += 1;
+            } else {
+                _neutral += 1;
+            }
+
             if (isWin) {
                 win();
                 lossCount = 0;
@@ -125,6 +131,37 @@
                 lossCount += 1;
             }
         };
+
+        this.prediction = function() {
+
+            let noP = 0;
+
+            try {
+                noP = parseFloat(_neutral / count) * 100;
+            } catch (e) {
+                console.error(e);
+            }
+
+            let result = {};
+
+            if (_hi > _lo) {
+                result.hilo = false;
+            } else if (_hi < _lo) {
+                result.hilo = true;
+            } else {
+                result.hilo = randNum() > 5000;
+            }
+
+            let a = Math.abs(_hi - _lo);
+            a = (a / count) * 100;
+
+            a += (noP - 5);
+  
+            result.betAmount = findNextBet(lossCount, bconfig.baseBet, a);
+
+
+            return result;
+        }
 
         this.compensate = () => {
             return nextLossLevel() - tolerence;
@@ -199,6 +236,7 @@
 
         this.bet = bet;
         this.isWin = isWin;
+        this.getCounter = getCounter;
 
         function isRollFinished() {
             return btc.balance() !== btc.prevAmt;
@@ -253,7 +291,7 @@
                         // console.log("finish");
                         return resolve(btc.balance() >= btc.prevAmt);
                     }
-                    setTimeout(rollChecker, (multiplier * bconfig.wait) + Math.round(Math.random() * 100));
+                    setTimeout(rollChecker, (bconfig.wait) + Math.round(Math.random() * 100));
                 }
                 rollChecker();
             });
